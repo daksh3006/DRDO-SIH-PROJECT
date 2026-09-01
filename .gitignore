@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+venv/
+.env
+
+shelter-sim/node_modules/
+shelter-sim/dist/
