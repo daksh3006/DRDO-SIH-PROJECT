@@ -1,13 +1,13 @@
-// Material properties aligned with typical backend MATERIALS.py values.
-// Frontend displays these for user feedback; thermal calc stays in Python.
+// Material properties aligned with backend MATERIALS.py values.
+// All values are real engineering properties (SI units).
 
 export const WALL_MATERIALS = {
   brick: {
     id: 'brick',
     name: 'Brick',
     conductivity: 0.72,      // W/(m·K)
-    density: 1920,            // kg/m³
-    specific_heat: 790,       // J/(kg·K)
+    density: 1920,           // kg/m³
+    specific_heat: 790,      // J/(kg·K)
     description: 'Traditional fired clay brick – moderate insulation',
   },
   concrete: {
@@ -96,13 +96,57 @@ export const ROOF_MATERIALS = {
 };
 
 export function getMaterialR(material, thickness) {
-  // Simple R-value estimate (m²K/W) = thickness / k
   if (!material || !thickness || thickness <= 0) return null;
   return (thickness / material.conductivity).toFixed(2);
 }
 
+/**
+ * Real thermal capacity (J/K) from geometry + material properties.
+ *
+ * C = Σ (ρ × c × V)
+ *   walls:  ρ_wall × c_wall × A_wall × thickness_wall
+ *   roof:   ρ_roof × c_roof × A_roof × thickness_roof
+ *   air:    ρ_air × c_air × volume   (volume ≈ roof_area × 2.5 m)
+ *
+ * No artificial min/max clamps — value follows materials and geometry only.
+ */
+export function estimateThermalCapacity(params) {
+  const wallMat = WALL_MATERIALS[params.wall_material];
+  const roofMat = ROOF_MATERIALS[params.roof_material];
+
+  const wallArea = Number(params.wall_area) || 0;
+  const roofArea = Number(params.roof_area) || 0;
+  const wallThk = Number(params.wall_thickness) || 0;
+  const roofThk = Number(params.roof_thickness) || 0;
+
+  let C = 0;
+
+  // Walls: full volumetric heat capacity
+  if (wallMat && wallArea > 0 && wallThk > 0) {
+    const volumeWall = wallArea * wallThk; // m³
+    C += wallMat.density * wallMat.specific_heat * volumeWall;
+  }
+
+  // Roof: full volumetric heat capacity
+  if (roofMat && roofArea > 0 && roofThk > 0) {
+    const volumeRoof = roofArea * roofThk; // m³
+    C += roofMat.density * roofMat.specific_heat * volumeRoof;
+  }
+
+  // Indoor air (ρ ≈ 1.2 kg/m³, c ≈ 1005 J/(kg·K))
+  // Volume approximated from roof area × typical internal height 2.5 m
+  if (roofArea > 0) {
+    const volumeAir = roofArea * 2.5;
+    C += 1.2 * 1005 * volumeAir;
+  }
+
+  return Math.round(C); // real value in J/K, no artificial limits
+}
+
 export const DEFAULT_PARAMS = {
   location: 'Leh, Ladakh',
+  city: 'Leh',
+  state: 'Ladakh',
   latitude: 34.1526,
   longitude: 77.5771,
   wall_area: 120,
@@ -112,8 +156,7 @@ export const DEFAULT_PARAMS = {
   roof_thickness: 0.25,
   wall_material: 'brick',
   roof_material: 'insulated_panel',
-  thermal_capacity: 150000,
-  initial_temperature: 15,
+  comfort_temperature: 30,
   orientation: 'South',
   simulation_hours: 24,
 };

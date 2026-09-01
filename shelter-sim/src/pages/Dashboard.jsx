@@ -106,7 +106,21 @@ export default function Dashboard() {
       <div className="mx-auto flex w-full max-w-[1600px] flex-1 overflow-hidden">
         {/* Sidebar */}
         <div className="hidden w-72 shrink-0 lg:block xl:w-80">
-          <Sidebar params={params} onChange={setParams} />
+          <Sidebar
+            params={params}
+            onChange={setParams}
+            weatherInfo={
+              results
+                ? {
+                    ambient_min: results.summary?.ambient_min,
+                    ambient_max: results.summary?.ambient_max,
+                    ambient_avg: results.summary?.ambient_avg,
+                    source: results.weather_meta?.source,
+                    date_used: results.weather_meta?.date_used || results.location_used?.date,
+                  }
+                : null
+            }
+          />
         </div>
 
         {/* Main content */}

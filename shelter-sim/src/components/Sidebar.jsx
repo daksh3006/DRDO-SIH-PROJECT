@@ -1,6 +1,6 @@
 import { MapPin, Box, Layers, Thermometer, ChevronDown } from 'lucide-react';
 import MaterialSelector from './MaterialSelector';
-import { DEFAULT_PARAMS } from '../data/materials';
+import { estimateThermalCapacity } from '../data/materials';
 
 function Section({ icon: Icon, title, children, defaultOpen = true }) {
   return (
@@ -24,19 +24,65 @@ function NumberInput({ label, value, onChange, unit, step = 1, min, max }) {
       </label>
       <input
         type="number"
-        value={value}
+        value={value === null || value === undefined ? '' : value}
         step={step}
         min={min}
         max={max}
-        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+        onChange={(e) => {
+          const raw = e.target.value;
+          if (raw === '' || raw === '-' || raw === '.' || raw === '-.') {
+            onChange(raw === '' ? '' : raw);
+            return;
+          }
+          const num = parseFloat(raw);
+          if (!Number.isNaN(num)) {
+            onChange(num);
+          }
+        }}
         className="w-full rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
       />
     </div>
   );
 }
 
-export default function Sidebar({ params, onChange }) {
+function TextInput({ label, value, onChange, placeholder }) {
+  return (
+    <div>
+      <label className="mb-1 block text-[11px] font-medium text-slate-400">
+        {label}
+      </label>
+      <input
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+      />
+    </div>
+  );
+}
+
+function formatCapacity(c) {
+  if (c >= 1_000_000) return `${(c / 1_000_000).toFixed(2)} MJ/K`;
+  if (c >= 1_000) return `${Math.round(c / 1_000)} kJ/K`;
+  return `${c} J/K`;
+}
+
+export default function Sidebar({ params, onChange, weatherInfo }) {
   const set = (key) => (val) => onChange({ ...params, [key]: val });
+
+  const updateLocation = (city, state) => {
+    const name = [city, state].filter(Boolean).join(', ');
+    onChange({
+      ...params,
+      city,
+      state,
+      location: name || params.location,
+    });
+  };
+
+  // Live thermal capacity from current geometry + materials
+  const thermalCapacity = estimateThermalCapacity(params);
 
   return (
     <aside className="flex h-full w-full flex-col overflow-y-auto border-r border-slate-700/80 bg-slate-900/80">
@@ -46,19 +92,21 @@ export default function Sidebar({ params, onChange }) {
         </h2>
       </div>
 
+      {/* ========== LOCATION ========== */}
       <Section icon={MapPin} title="Location" defaultOpen>
-        <div>
-          <label className="mb-1 block text-[11px] font-medium text-slate-400">
-            Site
-          </label>
-          <input
-            type="text"
-            value={params.location}
-            onChange={(e) => set('location')(e.target.value)}
-            placeholder="e.g. Leh, Ladakh"
-            className="w-full rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-          />
-        </div>
+        <TextInput
+          label="City"
+          value={params.city || ''}
+          onChange={(v) => updateLocation(v, params.state)}
+          placeholder="e.g. Leh"
+        />
+        <TextInput
+          label="State / UT"
+          value={params.state || ''}
+          onChange={(v) => updateLocation(params.city, v)}
+          placeholder="e.g. Ladakh"
+        />
+
         <div className="grid grid-cols-2 gap-2">
           <NumberInput
             label="Latitude"
@@ -73,11 +121,42 @@ export default function Sidebar({ params, onChange }) {
             step={0.0001}
           />
         </div>
-        <p className="text-[10px] text-slate-500">
-          Climate data will be resolved from location by backend (WEATHER module).
+
+        <p className="text-[10px] leading-relaxed text-slate-500">
+          Weather is fetched automatically for <strong className="text-slate-400">today</strong> at
+          these coordinates (Open-Meteo). Ambient temperature cannot be edited.
         </p>
+
+        {weatherInfo && (
+          <div className="rounded-md border border-cyan-500/30 bg-cyan-500/5 p-2.5 text-[11px]">
+            <p className="mb-1.5 font-medium text-cyan-300">
+              Today&apos;s Ambient Weather (read-only)
+            </p>
+            <div className="grid grid-cols-3 gap-1 text-slate-300">
+              <div>
+                <span className="text-slate-500">Min</span>
+                <br />
+                {weatherInfo.ambient_min}°C
+              </div>
+              <div>
+                <span className="text-slate-500">Avg</span>
+                <br />
+                {weatherInfo.ambient_avg}°C
+              </div>
+              <div>
+                <span className="text-slate-500">Max</span>
+                <br />
+                {weatherInfo.ambient_max}°C
+              </div>
+            </div>
+            <p className="mt-1.5 text-[10px] text-slate-500">
+              Source: {weatherInfo.source}
+            </p>
+          </div>
+        )}
       </Section>
 
+      {/* ========== GEOMETRY ========== */}
       <Section icon={Box} title="Shelter Geometry" defaultOpen>
         <NumberInput
           label="Wall Area"
@@ -139,6 +218,7 @@ export default function Sidebar({ params, onChange }) {
         </div>
       </Section>
 
+      {/* ========== MATERIALS ========== */}
       <Section icon={Layers} title="Materials" defaultOpen>
         <MaterialSelector
           wallMaterial={params.wall_material}
@@ -150,30 +230,45 @@ export default function Sidebar({ params, onChange }) {
         />
       </Section>
 
-      <Section icon={Thermometer} title="Thermal Parameters" defaultOpen>
+      {/* ========== COMFORT + AUTO THERMAL MASS ========== */}
+      <Section icon={Thermometer} title="Comfort & Thermal Mass" defaultOpen>
         <NumberInput
-          label="Initial Indoor Temperature"
-          value={params.initial_temperature}
-          onChange={set('initial_temperature')}
+          label="Your Comfortable Temperature"
+          value={params.comfort_temperature}
+          onChange={set('comfort_temperature')}
           unit="°C"
           step={0.5}
-        />
-        <NumberInput
-          label="Thermal Capacity / Mass"
-          value={params.thermal_capacity}
-          onChange={set('thermal_capacity')}
-          unit="J/K"
-          step={10000}
-          min={10000}
+          min={10}
+          max={40}
         />
         <p className="text-[10px] text-slate-500">
-          Higher thermal mass stabilizes indoor temperature against diurnal swings.
+          Starting indoor temperature for the simulation (default 30°C).
         </p>
+
+        {/* Auto-calculated thermal capacity — updates live */}
+        <div className="rounded-md border border-slate-600 bg-slate-800/80 px-2.5 py-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-slate-400">
+              Thermal Capacity / Mass
+            </span>
+            <span className="text-[10px] text-cyan-400/80">auto</span>
+          </div>
+          <p className="mt-1 text-sm font-semibold tabular-nums text-slate-100">
+            {formatCapacity(thermalCapacity)}
+          </p>
+          <p className="mt-0.5 text-[10px] text-slate-500">
+            {thermalCapacity.toLocaleString()} J/K
+          </p>
+          <p className="mt-1.5 text-[10px] leading-relaxed text-slate-500">
+            Calculated from wall &amp; roof materials, areas and thicknesses.
+            Higher mass → more stable indoor temperature.
+          </p>
+        </div>
       </Section>
 
       <div className="mt-auto border-t border-slate-700/60 p-3 text-[10px] text-slate-500">
-        Parameters map directly to{' '}
-        <code className="text-cyan-500/80">simulate_shelter(...)</code>
+        Weather is fetched live for today from Open-Meteo. Thermal mass is
+        estimated automatically from your design.
       </div>
     </aside>
   );
