@@ -25,12 +25,12 @@ class SimulationRequest(BaseModel):
     initial_temperature: Optional[float] = None
 
 
-@app.get("/api/health")
+@app.get("/health")
 def health():
     return {"status": "ok"}
 
 
-@app.post("/api/simulate")
+@app.post("/simulate")
 def simulate(request: SimulationRequest):
 
     try:
