@@ -150,10 +150,18 @@ async def fetch_weather(
 
     past_start = max(0, start_idx - 72)
     past_timestamps = times[past_start:start_idx] if times else []
+    past_sol = np.nan_to_num(np.array(solar[past_start:start_idx], dtype=float), nan=0.0) if solar else solar_irradiance
+
+    # Normalize solar radiation units from kJ/m² to W/m² if values exceed Atmospheric Solar Constant (1361 W/m²)
+    if np.max(solar_irradiance) > 1361.0:
+        solar_irradiance = solar_irradiance / 3.6
+        dni_arr = dni_arr / 3.6
+        dhi_arr = dhi_arr / 3.6
+        past_sol = past_sol / 3.6
 
     past_weather = {
         "ambient": np.array(temps[past_start:start_idx], dtype=float) if temps else ambient_temperature,
-        "solar": np.nan_to_num(np.array(solar[past_start:start_idx], dtype=float), nan=0.0) if solar else solar_irradiance,
+        "solar": past_sol,
         "wind": np.nan_to_num(np.array(winds[past_start:start_idx], dtype=float), nan=2.0) if winds else wind_arr,
         "timestamps": past_timestamps,
     }
