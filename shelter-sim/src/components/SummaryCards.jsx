@@ -34,8 +34,8 @@ const cards = [
   },
   {
     key: 'total_solar_gain',
-    label: 'Total Solar Gain',
-    unit: 'kWh-eq',
+    label: 'Indoor Solar Gain',
+    unit: 'kWh',
     icon: Sun,
     color: 'text-yellow-400',
     bg: 'bg-yellow-500/10 border-yellow-500/30',
@@ -43,7 +43,7 @@ const cards = [
   {
     key: 'total_heat_loss',
     label: 'Total Heat Loss',
-    unit: 'kWh-eq',
+    unit: 'kWh',
     icon: ArrowDownToLine,
     color: 'text-rose-400',
     bg: 'bg-rose-500/10 border-rose-500/30',

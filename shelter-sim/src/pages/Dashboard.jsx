@@ -11,7 +11,6 @@ import { DEFAULT_PARAMS } from '../data/materials';
 import {
   runSimulation,
   checkBackendStatus,
-  generateMockResults,
 } from '../services/api';
 import { AlertTriangle, FlaskConical } from 'lucide-react';
 
@@ -46,23 +45,17 @@ export default function Dashboard() {
     setError(null);
 
     try {
-      let data;
-      if (backendOnline) {
-        data = await runSimulation(params);
-      } else {
-        // Simulate network delay for realism in demo
-        await new Promise((r) => setTimeout(r, 900));
-        data = generateMockResults(params);
+      if (!backendOnline) {
+        throw new Error(
+          'Backend unavailable. Thermal simulation cannot be performed offline (physics model runs only on the Python server).'
+        );
       }
+      const data = await runSimulation(params);
       setResults(data);
     } catch (err) {
       console.error(err);
-      // Fallback to mock so demo never breaks
-      setError(
-        err.message || 'Backend unavailable — showing offline mock results'
-      );
-      const mock = generateMockResults(params);
-      setResults(mock);
+      setError(err.message || 'Simulation failed');
+      setResults(null);
     } finally {
       setIsRunning(false);
     }

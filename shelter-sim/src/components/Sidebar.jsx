@@ -1,6 +1,8 @@
-import { MapPin, Box, Layers, Thermometer, ChevronDown } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { MapPin, Box, Layers, Thermometer, ChevronDown, Loader2 } from 'lucide-react';
 import MaterialSelector from './MaterialSelector';
-import { estimateThermalCapacity } from '../data/materials';
+import { estimateThermalCapacity, estimateThermalCapacityBreakdown } from '../data/materials';
+import { reverseGeocode } from '../services/api';
 
 function Section({ icon: Icon, title, children, defaultOpen = true }) {
   return (
@@ -35,9 +37,7 @@ function NumberInput({ label, value, onChange, unit, step = 1, min, max }) {
             return;
           }
           const num = parseFloat(raw);
-          if (!Number.isNaN(num)) {
-            onChange(num);
-          }
+          if (!Number.isNaN(num)) onChange(num);
         }}
         className="w-full rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
       />
@@ -45,7 +45,7 @@ function NumberInput({ label, value, onChange, unit, step = 1, min, max }) {
   );
 }
 
-function TextInput({ label, value, onChange, placeholder }) {
+function TextInput({ label, value, onChange, placeholder, readOnly = false }) {
   return (
     <div>
       <label className="mb-1 block text-[11px] font-medium text-slate-400">
@@ -55,8 +55,13 @@ function TextInput({ label, value, onChange, placeholder }) {
         type="text"
         value={value}
         placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1.5 text-sm text-slate-100 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+        readOnly={readOnly}
+        onChange={(e) => onChange && onChange(e.target.value)}
+        className={`w-full rounded-md border border-slate-600 px-2.5 py-1.5 text-sm focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 ${
+          readOnly
+            ? 'bg-slate-900/80 text-slate-300 cursor-default'
+            : 'bg-slate-800 text-slate-100'
+        }`}
       />
     </div>
   );
@@ -70,18 +75,54 @@ function formatCapacity(c) {
 
 export default function Sidebar({ params, onChange, weatherInfo }) {
   const set = (key) => (val) => onChange({ ...params, [key]: val });
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [placeName, setPlaceName] = useState(params.location || '');
+  const geoTimer = useRef(null);
+  const lastGeo = useRef('');
 
-  const updateLocation = (city, state) => {
-    const name = [city, state].filter(Boolean).join(', ');
-    onChange({
-      ...params,
-      city,
-      state,
-      location: name || params.location,
-    });
-  };
+  // Reverse-geocode when latitude / longitude change (debounced)
+  useEffect(() => {
+    const lat = Number(params.latitude);
+    const lon = Number(params.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
 
-  // Live thermal capacity from current geometry + materials
+    const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+    if (key === lastGeo.current) return;
+
+    if (geoTimer.current) clearTimeout(geoTimer.current);
+    geoTimer.current = setTimeout(async () => {
+      setGeoLoading(true);
+      try {
+        const data = await reverseGeocode(lat, lon);
+        lastGeo.current = key;
+        const city = data.city || '';
+        const state = data.state || '';
+        const display =
+          data.display_name ||
+          [city, state, data.country].filter(Boolean).join(', ');
+        setPlaceName(display);
+        onChange({
+          ...params,
+          city,
+          state,
+          location: display,
+          latitude: lat,
+          longitude: lon,
+        });
+      } catch {
+        // Keep existing labels if geocoding fails
+      } finally {
+        setGeoLoading(false);
+      }
+    }, 600);
+
+    return () => {
+      if (geoTimer.current) clearTimeout(geoTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.latitude, params.longitude]);
+
   const thermalCapacity = estimateThermalCapacity(params);
 
   return (
@@ -94,19 +135,6 @@ export default function Sidebar({ params, onChange, weatherInfo }) {
 
       {/* ========== LOCATION ========== */}
       <Section icon={MapPin} title="Location" defaultOpen>
-        <TextInput
-          label="City"
-          value={params.city || ''}
-          onChange={(v) => updateLocation(v, params.state)}
-          placeholder="e.g. Leh"
-        />
-        <TextInput
-          label="State / UT"
-          value={params.state || ''}
-          onChange={(v) => updateLocation(params.city, v)}
-          placeholder="e.g. Ladakh"
-        />
-
         <div className="grid grid-cols-2 gap-2">
           <NumberInput
             label="Latitude"
@@ -122,9 +150,24 @@ export default function Sidebar({ params, onChange, weatherInfo }) {
           />
         </div>
 
+        <div>
+          <label className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
+            Detected area
+            {geoLoading && (
+              <Loader2 className="h-3 w-3 animate-spin text-cyan-400" />
+            )}
+          </label>
+          <div className="rounded-md border border-slate-600 bg-slate-900/80 px-2.5 py-1.5 text-sm text-slate-200">
+            {placeName || params.location || 'Enter latitude & longitude'}
+          </div>
+          <p className="mt-1 text-[10px] text-slate-500">
+            Place name is filled automatically from coordinates (OpenStreetMap).
+          </p>
+        </div>
+
         <p className="text-[10px] leading-relaxed text-slate-500">
-          Weather is fetched automatically for <strong className="text-slate-400">today</strong> at
-          these coordinates (Open-Meteo). Ambient temperature cannot be edited.
+          Weather is fetched for <strong className="text-slate-400">today</strong> at
+          these coordinates. Ambient temperature cannot be edited.
         </p>
 
         {weatherInfo && (
@@ -159,7 +202,7 @@ export default function Sidebar({ params, onChange, weatherInfo }) {
       {/* ========== GEOMETRY ========== */}
       <Section icon={Box} title="Shelter Geometry" defaultOpen>
         <NumberInput
-          label="Wall Area"
+          label="Wall Area (gross, incl. openings)"
           value={params.wall_area}
           onChange={set('wall_area')}
           unit="m²"
@@ -230,26 +273,25 @@ export default function Sidebar({ params, onChange, weatherInfo }) {
         />
       </Section>
 
-      {/* ========== COMFORT + AUTO THERMAL MASS ========== */}
+      {/* ========== COMFORT + THERMAL MASS ========== */}
       <Section icon={Thermometer} title="Comfort & Thermal Mass" defaultOpen>
         <NumberInput
-          label="Your Comfortable Temperature"
-          value={params.comfort_temperature}
-          onChange={set('comfort_temperature')}
+          label="Initial Indoor Temperature"
+          value={params.initial_temperature}
+          onChange={set('initial_temperature')}
           unit="°C"
           step={0.5}
           min={10}
           max={40}
         />
         <p className="text-[10px] text-slate-500">
-          Starting indoor temperature for the simulation (default 30°C).
+          Temperature at which the shelter starts. Default 20°C. The graph shows how indoor temperature then drifts.
         </p>
 
-        {/* Auto-calculated thermal capacity — updates live */}
         <div className="rounded-md border border-slate-600 bg-slate-800/80 px-2.5 py-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium text-slate-400">
-              Thermal Capacity / Mass
+              Envelope thermal capacity (C_env)
             </span>
             <span className="text-[10px] text-cyan-400/80">auto</span>
           </div>
@@ -260,15 +302,14 @@ export default function Sidebar({ params, onChange, weatherInfo }) {
             {thermalCapacity.toLocaleString()} J/K
           </p>
           <p className="mt-1.5 text-[10px] leading-relaxed text-slate-500">
-            Calculated from wall &amp; roof materials, areas and thicknesses.
-            Higher mass → more stable indoor temperature.
+            C_env = C_walls + C_roof using <strong className="text-slate-400">net</strong> wall
+            area (gross − windows). Indoor air capacity is separate in the 2-node model.
           </p>
         </div>
       </Section>
 
       <div className="mt-auto border-t border-slate-700/60 p-3 text-[10px] text-slate-500">
-        Weather is fetched live for today from Open-Meteo. Thermal mass is
-        estimated automatically from your design.
+        Enter lat/lon → area name is detected automatically. Weather is for today.
       </div>
     </aside>
   );

@@ -33,7 +33,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function TemperatureChart({ results }) {
   if (!results) return null;
 
-  const comfortTemp = results.comfort_temperature ?? 30;
+  const comfortTemp = results.initial_temperature ?? results.comfort_temperature ?? 20;
 
   const data = results.hours.map((h, i) => ({
     hour: h,
@@ -73,16 +73,16 @@ export default function TemperatureChart({ results }) {
             wrapperStyle={{ fontSize: 11, color: '#94a3b8' }}
             iconType="plainline"
           />
-          {/* Comfort band 16–26°C (standard) */}
+          {/* Reference comfort band (standard) — not the user's personal target */}
           <ReferenceArea y1={16} y2={26} fill="#10b981" fillOpacity={0.06} />
-          {/* User's preferred comfortable temperature */}
+          {/* User's preferred / initial indoor temperature */}
           <ReferenceLine
             y={comfortTemp}
             stroke="#a78bfa"
             strokeDasharray="6 4"
             strokeWidth={1.5}
             label={{
-              value: `Comfort ${comfortTemp}°C`,
+              value: `Initial ${comfortTemp}°C`,
               position: 'insideTopRight',
               fill: '#a78bfa',
               fontSize: 10,
@@ -110,7 +110,7 @@ export default function TemperatureChart({ results }) {
         </LineChart>
       </ResponsiveContainer>
       <p className="mt-1 text-center text-[10px] text-slate-500">
-        Green band = standard comfort (16–26 °C) · Purple line = your preferred temperature ({comfortTemp}°C)
+        Green band = reference range (16–26°C) · Purple line = initial indoor temperature ({comfortTemp}°C)
       </p>
     </div>
   );

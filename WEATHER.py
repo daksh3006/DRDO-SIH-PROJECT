@@ -1,7 +1,6 @@
 """
 Real weather data fetcher using the free Open-Meteo Forecast API.
-Always fetches the next 24 hourly values for "today" at the given coordinates.
-No API key required.
+Returns temperature, GHI, DNI, DHI for 24 hours.
 """
 
 from __future__ import annotations
@@ -19,21 +18,17 @@ async def fetch_weather(
     longitude: float,
     timezone: str = "auto",
     max_retries: int = 3,
-) -> Tuple[np.ndarray, np.ndarray, dict]:
-    """
-    Fetch 24-hour hourly temperature and solar irradiance for today.
-
-    Returns
-    -------
-    ambient_temperature : np.ndarray shape (24,)
-    solar_irradiance    : np.ndarray shape (24,)
-    meta                : dict
-    """
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, dict]:
     params = {
         "latitude": latitude,
         "longitude": longitude,
-        "hourly": "temperature_2m,shortwave_radiation",
-        "forecast_days": 1,
+        "hourly": (
+            "temperature_2m,"
+            "shortwave_radiation,"
+            "direct_normal_irradiance,"
+            "diffuse_radiation"
+        ),
+        "forecast_days": 2,
         "timezone": timezone,
     }
 
@@ -56,17 +51,29 @@ async def fetch_weather(
     hourly = data.get("hourly", {})
     temps = hourly.get("temperature_2m", [])
     solar = hourly.get("shortwave_radiation", [])
+    dni = hourly.get("direct_normal_irradiance", [])
+    dhi = hourly.get("diffuse_radiation", [])
     times = hourly.get("time", [])
 
-    if len(temps) < 24 or len(solar) < 24:
+    n = 25  # hours 0..24 inclusive → 24 elapsed hours
+    if (
+        len(temps) < n
+        or len(solar) < n
+        or len(dni) < n
+        or len(dhi) < n
+    ):
         raise ValueError(
-            f"Open-Meteo returned insufficient hourly data "
-            f"(temp={len(temps)}, solar={len(solar)})."
+            "Open-Meteo returned insufficient hourly weather data "
+            f"(temp={len(temps)}, ghi={len(solar)}, "
+            f"dni={len(dni)}, dhi={len(dhi)}; need {n})."
         )
 
-    ambient_temperature = np.array(temps[:24], dtype=float)
-    solar_irradiance = np.array(solar[:24], dtype=float)
-    solar_irradiance = np.nan_to_num(solar_irradiance, nan=0.0)
+    ambient_temperature = np.array(temps[:n], dtype=float)
+    solar_irradiance = np.nan_to_num(
+        np.array(solar[:n], dtype=float), nan=0.0
+    )
+    dni_arr = np.nan_to_num(np.array(dni[:n], dtype=float), nan=0.0)
+    dhi_arr = np.nan_to_num(np.array(dhi[:n], dtype=float), nan=0.0)
 
     meta = {
         "latitude": data.get("latitude"),
@@ -74,16 +81,17 @@ async def fetch_weather(
         "elevation": data.get("elevation"),
         "timezone": data.get("timezone"),
         "timezone_abbreviation": data.get("timezone_abbreviation"),
+        "utc_offset_seconds": data.get("utc_offset_seconds"),
         "source": "Open-Meteo Forecast",
-        "hours": times[:24] if times else [f"{h:02d}:00" for h in range(24)],
+        "hours": times[:n] if times else [f"{h:02d}:00" for h in range(n)],
     }
 
-    return ambient_temperature, solar_irradiance, meta
+    return ambient_temperature, solar_irradiance, dni_arr, dhi_arr, meta
 
 
 def fetch_weather_sync(
     latitude: float,
     longitude: float,
     timezone: str = "auto",
-) -> Tuple[np.ndarray, np.ndarray, dict]:
+):
     return asyncio.run(fetch_weather(latitude, longitude, timezone))

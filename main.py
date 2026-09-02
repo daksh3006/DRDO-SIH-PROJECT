@@ -1,21 +1,21 @@
 """
 FastAPI backend for the Area-Specific Passive Shelter Thermal Simulator.
-Fetches today's real weather from Open-Meteo and runs the energy-balance model.
 """
 
 from __future__ import annotations
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional
+import httpx
 
 from thermal_model import simulate_shelter
 from WEATHER import fetch_weather
 
 app = FastAPI(
     title="Thermal Shelter Simulator",
-    description="24-hour passive shelter thermal comfort simulation with today's live weather",
-    version="2.2.0",
+    description="24-hour passive shelter thermal comfort simulation",
+    version="3.0.0",
 )
 
 app.add_middleware(
@@ -25,6 +25,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+COMFORT_MIN = 16.0
+COMFORT_MAX = 26.0
 
 
 class SimulationRequest(BaseModel):
@@ -43,25 +46,82 @@ class SimulationRequest(BaseModel):
     wall_material: str
     roof_material: str
 
-    thermal_capacity: float = Field(150000.0, gt=1000)
+    thermal_capacity: float = Field(..., gt=0)
     initial_temperature: Optional[float] = None
 
     orientation: Optional[str] = "South"
+    shelter_height: float = Field(2.5, gt=0)
 
 
 @app.get("/api/health")
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "2.2.0"}
+    return {"status": "ok", "version": "3.0.0"}
+
+
+@app.get("/api/geocode")
+@app.get("/geocode")
+async def reverse_geocode(
+    lat: float = Query(...),
+    lon: float = Query(...),
+):
+    try:
+        url = "https://nominatim.openstreetmap.org/reverse"
+        params = {
+            "lat": lat,
+            "lon": lon,
+            "format": "json",
+            "zoom": 10,
+            "addressdetails": 1,
+        }
+        headers = {
+            "User-Agent": "DRDO-SIH-ShelterSimulator/3.0 (educational project)"
+        }
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            r = await client.get(url, params=params, headers=headers)
+            r.raise_for_status()
+            data = r.json()
+
+        address = data.get("address") or {}
+        city = (
+            address.get("city")
+            or address.get("town")
+            or address.get("village")
+            or address.get("hamlet")
+            or address.get("suburb")
+            or address.get("county")
+            or ""
+        )
+        state = (
+            address.get("state")
+            or address.get("region")
+            or address.get("state_district")
+            or ""
+        )
+        country = address.get("country") or ""
+        display = data.get("display_name") or ", ".join(
+            p for p in [city, state, country] if p
+        )
+        return {
+            "city": city,
+            "state": state,
+            "country": country,
+            "display_name": display,
+            "latitude": lat,
+            "longitude": lon,
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Reverse geocoding failed: {exc}"
+        )
 
 
 @app.post("/api/simulate")
 @app.post("/simulate")
 async def simulate(request: SimulationRequest):
     try:
-        # 1. Fetch today's weather for the given coordinates
         try:
-            ambient, solar, weather_meta = await fetch_weather(
+            ambient, solar, dni, dhi, weather_meta = await fetch_weather(
                 latitude=request.latitude,
                 longitude=request.longitude,
             )
@@ -71,7 +131,16 @@ async def simulate(request: SimulationRequest):
                 detail=f"Failed to fetch weather data: {weather_err}",
             )
 
-        # 2. Run thermal simulation (indoor starts from ambient[0])
+        hour_timestamps = weather_meta.get("hours") or None
+        # Open-Meteo returns timezone name; offset not always numeric — leave None
+        # unless present in meta later.
+        utc_offset_hours = weather_meta.get("utc_offset_seconds")
+        if utc_offset_hours is not None:
+            try:
+                utc_offset_hours = float(utc_offset_hours) / 3600.0
+            except Exception:
+                utc_offset_hours = None
+
         (
             hours,
             indoor_temperature,
@@ -89,6 +158,14 @@ async def simulate(request: SimulationRequest):
             solar_irradiance=solar,
             thermal_capacity=request.thermal_capacity,
             initial_temperature=request.initial_temperature,
+            latitude=request.latitude,
+            longitude=request.longitude,
+            orientation=request.orientation or "South",
+            dni=dni,
+            dhi=dhi,
+            shelter_height=request.shelter_height,
+            hour_timestamps=hour_timestamps,
+            utc_offset_hours=utc_offset_hours,
         )
 
         hours = hours.tolist()
@@ -99,20 +176,26 @@ async def simulate(request: SimulationRequest):
 
         comfort_status = []
         for t in indoor_temperature:
-            if 16 <= t <= 26:
+            if COMFORT_MIN <= t <= COMFORT_MAX:
                 comfort_status.append("comfortable")
-            elif t < 16:
+            elif t < COMFORT_MIN:
                 comfort_status.append("too_cold")
             else:
                 comfort_status.append("too_hot")
 
         avg_t = sum(indoor_temperature) / len(indoor_temperature)
+        total_solar_kwh = sum(solar_gain) * 3600.0 / 3_600_000.0
+        total_heat_loss_kwh = sum(heat_loss) * 3600.0 / 3_600_000.0
+
         summary = {
             "average_temperature": round(avg_t, 1),
             "minimum_temperature": round(min(indoor_temperature), 1),
             "maximum_temperature": round(max(indoor_temperature), 1),
-            "total_solar_gain": round(sum(solar_gain) * 3600 / 3_600_000, 2),
-            "total_heat_loss": round(sum(heat_loss) * 3600 / 3_600_000, 2),
+            "total_solar_gain": round(total_solar_kwh, 2),  # indoor (window) solar gain kWh
+            "total_heat_loss": round(total_heat_loss_kwh, 2),
+            "total_solar_gain_kwh": round(total_solar_kwh, 2),
+            "total_heat_loss_kwh": round(total_heat_loss_kwh, 2),
+            "indoor_solar_gain_kwh": round(total_solar_kwh, 2),
             "comfort_hours": comfort_status.count("comfortable"),
             "ambient_min": round(min(ambient_list), 1),
             "ambient_max": round(max(ambient_list), 1),
@@ -128,7 +211,9 @@ async def simulate(request: SimulationRequest):
             "comfort_status": comfort_status,
             "summary": summary,
             "weather_meta": weather_meta,
-            "comfort_temperature": request.initial_temperature if request.initial_temperature is not None else 30,
+            "initial_temperature": request.initial_temperature
+            if request.initial_temperature is not None
+            else ambient_list[0],
             "location_used": {
                 "name": request.location,
                 "city": request.city,
