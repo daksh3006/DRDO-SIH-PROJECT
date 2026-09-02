@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { MapPin, Box, Layers, ChevronDown, Loader2, AlertCircle, AlertTriangle } from 'lucide-react';
+import { MapPin, Box, Layers, ChevronDown, Loader2, AlertCircle, AlertTriangle, Thermometer } from 'lucide-react';
 import MaterialSelector from './MaterialSelector';
 import { estimateThermalCapacity, estimateThermalCapacityBreakdown, WINDOW_MATERIALS } from '../data/materials';
 import { reverseGeocode } from '../services/api';
@@ -367,6 +367,33 @@ export default function Sidebar({ params, onChange, weatherInfo }) {
             <span>Volume: {breakdown.volume} m³</span>
           </div>
         </div>
+      </Section>
+
+      {/* ========== THERMAL COMFORT RANGE ========== */}
+      <Section icon={Thermometer} title="Thermal Comfort Target" defaultOpen>
+        <div className="grid grid-cols-2 gap-2">
+          <NumberInput
+            label="Min Comfort Temp"
+            value={params.comfort_min}
+            onChange={set('comfort_min')}
+            unit="°C"
+            step={0.5}
+            min={-20}
+            max={40}
+          />
+          <NumberInput
+            label="Max Comfort Temp"
+            value={params.comfort_max}
+            onChange={set('comfort_max')}
+            unit="°C"
+            step={0.5}
+            min={0}
+            max={50}
+          />
+        </div>
+        <p className="text-[10px] text-slate-500">
+          Default: 16°C – 26°C (ASHRAE Cold Climate Comfort Standard). Customize if desired.
+        </p>
       </Section>
     </aside>
   );

@@ -4,6 +4,9 @@ export default function ComfortCard({ results }) {
   const comfortStatus = results?.time_series?.comfort_status || results?.comfort_status;
   if (!comfortStatus) return null;
 
+  const cMin = results?.summary?.comfort_min ?? 16;
+  const cMax = results?.summary?.comfort_max ?? 26;
+
   const counts = comfortStatus.reduce(
     (acc, s) => {
       acc[s] = (acc[s] || 0) + 1;
@@ -50,7 +53,7 @@ export default function ComfortCard({ results }) {
         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
           Thermal Comfort Status
         </h3>
-        <span className="text-[10px] text-slate-500 font-mono font-medium">16°C – 26°C Range</span>
+        <span className="text-[10px] text-slate-500 font-mono font-medium">{cMin}°C – {cMax}°C Range</span>
       </div>
 
       {/* Dominant status badge */}

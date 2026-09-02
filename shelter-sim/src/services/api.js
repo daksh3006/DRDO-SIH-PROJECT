@@ -87,6 +87,8 @@ export async function runSimulation(params) {
       : null,
     orientation: params.orientation || 'South',
     shelter_height: toNum(params.shelter_height, 2.5),
+    comfort_min: toNum(params.comfort_min, 16),
+    comfort_max: toNum(params.comfort_max, 26),
     spin_up: params.spin_up !== false,
   };
 
@@ -152,6 +154,8 @@ export async function fetchSensitivitySweep(params, sweepVariable) {
       : null,
     orientation: params.orientation || 'South',
     shelter_height: toNum(params.shelter_height, 2.5),
+    comfort_min: toNum(params.comfort_min, 16),
+    comfort_max: toNum(params.comfort_max, 26),
     spin_up: params.spin_up !== false,
     sweep_variable: sweepVariable,
   };

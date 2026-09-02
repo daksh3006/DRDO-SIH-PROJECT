@@ -33,9 +33,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-COMFORT_MIN = 16.0
-COMFORT_MAX = 26.0
-
 
 class SimulationRequest(BaseModel):
     latitude: float = Field(..., ge=-90.0, le=90.0)
@@ -62,6 +59,9 @@ class SimulationRequest(BaseModel):
     roof_pitch: float = Field(15.0, ge=0.0, le=90.0, description="Roof pitch/tilt angle in degrees")
     spin_up: bool = True
 
+    comfort_min: float = Field(16.0, description="User defined minimum comfort temperature in °C")
+    comfort_max: float = Field(26.0, description="User defined maximum comfort temperature in °C")
+
     @model_validator(mode="after")
     def validate_physical_limits(self) -> SimulationRequest:
         max_window_area = 0.85 * self.wall_area
@@ -69,6 +69,10 @@ class SimulationRequest(BaseModel):
             raise ValueError(
                 f"Window area ({self.window_area:.2f} m²) cannot exceed 85% of gross wall area "
                 f"({max_window_area:.2f} m²)."
+            )
+        if self.comfort_min >= self.comfort_max:
+            raise ValueError(
+                f"Min comfort temperature ({self.comfort_min}°C) must be less than max comfort temperature ({self.comfort_max}°C)."
             )
         return self
 
@@ -214,11 +218,14 @@ async def simulate(request: SimulationRequest):
         elapsed_loss = heat_loss[1:]
         elapsed_gain = solar_gain[1:]
 
+        c_min = request.comfort_min
+        c_max = request.comfort_max
+
         comfort_hours_count = sum(
-            1 for t in elapsed_indoor if COMFORT_MIN <= t <= COMFORT_MAX
+            1 for t in elapsed_indoor if c_min <= t <= c_max
         )
         comfort_status = [
-            "comfortable" if COMFORT_MIN <= t <= COMFORT_MAX else ("too_cold" if t < COMFORT_MIN else "too_hot")
+            "comfortable" if c_min <= t <= c_max else ("too_cold" if t < c_min else "too_hot")
             for t in elapsed_indoor
         ]
 
@@ -240,6 +247,8 @@ async def simulate(request: SimulationRequest):
                 "minimum_temperature": round(float(np.min(elapsed_indoor)), 1),
                 "maximum_temperature": round(float(np.max(elapsed_indoor)), 1),
                 "comfort_hours": comfort_hours_count,
+                "comfort_min": c_min,
+                "comfort_max": c_max,
                 "outward_heat_transfer_kwh": round(total_loss_kwh, 2),
                 "total_solar_gain_kwh": round(total_gain_kwh, 2),
                 "ambient_min": round(float(np.min(elapsed_ambient)), 1),
@@ -288,6 +297,9 @@ async def parametric_sensitivity(request: SensitivityRequest):
         sweep_values = ranges.get(var, ranges["wall_thickness"])
         results = []
 
+        c_min = request.comfort_min
+        c_max = request.comfort_max
+
         for val in sweep_values:
             params_dict = request.model_dump()
             params_dict[var] = val
@@ -323,7 +335,7 @@ async def parametric_sensitivity(request: SensitivityRequest):
 
             elapsed_indoor = indoor_temp[1:]
             elapsed_loss = heat_loss[1:]
-            comfort_c = sum(1 for t in elapsed_indoor if COMFORT_MIN <= t <= COMFORT_MAX)
+            comfort_c = sum(1 for t in elapsed_indoor if c_min <= t <= c_max)
             total_loss_kwh = sum(elapsed_loss) * 3600.0 / 3_600_000.0
 
             results.append({

@@ -227,5 +227,7 @@ export const DEFAULT_PARAMS = {
   initial_temperature: '',
   orientation: 'South',
   shelter_height: 2.5,
+  comfort_min: 16,
+  comfort_max: 26,
   spin_up: true,
 };

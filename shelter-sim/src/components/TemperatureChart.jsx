@@ -49,6 +49,9 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function TemperatureChart({ results }) {
   if (!results) return null;
 
+  const cMin = results?.summary?.comfort_min ?? 16;
+  const cMax = results?.summary?.comfort_max ?? 26;
+
   const series = results.time_series || results;
   const hours = series.hours || [];
   const timestamps = series.timestamps || series.hour_timestamps || [];
@@ -108,8 +111,8 @@ export default function TemperatureChart({ results }) {
               wrapperStyle={{ fontSize: 11, color: '#475569', fontWeight: 500, paddingTop: '8px' }}
               iconType="plainline"
             />
-            {/* Comfort band (16-26 °C) */}
-            <ReferenceArea y1={16} y2={26} fill="#10b981" fillOpacity={0.08} />
+            {/* Comfort band */}
+            <ReferenceArea y1={cMin} y2={cMax} fill="#10b981" fillOpacity={0.08} />
             {/* Initial / Spin-up baseline */}
             <ReferenceLine
               y={startTemp}
@@ -148,7 +151,7 @@ export default function TemperatureChart({ results }) {
       </div>
 
       <p className="mt-2 shrink-0 text-center text-[10px] font-medium text-slate-500">
-        Sky Blue line = Estimated Indoor Temp (±1.5°C Model Uncertainty Band) · Green shading = ASHRAE comfort band (16–26°C) · Purple baseline = start state ({startTemp}°C)
+        Sky Blue line = Estimated Indoor Temp (±1.5°C Model Uncertainty Band) · Green shading = comfort band ({cMin}–{cMax}°C) · Purple baseline = start state ({startTemp}°C)
       </p>
     </div>
   );

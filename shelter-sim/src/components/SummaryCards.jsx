@@ -91,6 +91,9 @@ const cardDefs = [
 export default function SummaryCards({ summary }) {
   if (!summary) return null;
 
+  const cMin = summary.comfort_min ?? 16;
+  const cMax = summary.comfort_max ?? 26;
+
   return (
     <div className="w-full rounded-2xl border border-slate-200 bg-white shadow-xs">
       <div className="grid grid-cols-2 divide-y divide-slate-100 sm:grid-cols-3 sm:divide-y-0 lg:grid-cols-6 lg:divide-x divide-slate-200">
@@ -104,6 +107,8 @@ export default function SummaryCards({ summary }) {
           }
 
           const pct = getPct ? getPct(val) : defaultPct;
+          const displaySub = label === 'Comfort hours' ? `${cMin}–${cMax}°C range` : sub;
+          const displayFullName = label === 'Comfort hours' ? `Thermal Comfort Duration (${cMin}°C – ${cMax}°C)` : fullName;
 
           return (
             <div key={label} className="group relative flex items-center gap-3 p-3.5 sm:p-4 hover:bg-[#F0F7FF]/50 transition-colors cursor-pointer">
@@ -139,7 +144,7 @@ export default function SummaryCards({ summary }) {
                   </span>
                   <span className="text-xs font-medium text-slate-600">{unit}</span>
                 </div>
-                <p className="text-[10px] font-medium text-slate-400 truncate">{sub}</p>
+                <p className="text-[10px] font-medium text-slate-400 truncate">{displaySub}</p>
               </div>
 
               {/* Animated Big Hover Detail Card */}
@@ -170,8 +175,8 @@ export default function SummaryCards({ summary }) {
                       <Icon className={`h-5 w-5 ${iconColor}`} />
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-slate-900 leading-snug">{fullName}</h4>
-                      <span className="text-[10px] font-semibold text-[#0284C7]">{sub}</span>
+                      <h4 className="text-xs font-bold text-slate-900 leading-snug">{displayFullName}</h4>
+                      <span className="text-[10px] font-semibold text-[#0284C7]">{displaySub}</span>
                     </div>
                   </div>
 
