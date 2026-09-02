@@ -7,7 +7,9 @@ export const WALL_MATERIALS = {
     conductivity: 0.72,
     density: 1920,
     specific_heat: 790,
-    description: 'Traditional fired clay brick – moderate insulation (representative value)',
+    solar_absorptivity: 0.65,
+    emissivity: 0.90,
+    description: 'Traditional fired clay brick – moderate thermal mass (representative value)',
   },
   concrete: {
     id: 'concrete',
@@ -15,6 +17,8 @@ export const WALL_MATERIALS = {
     conductivity: 1.4,
     density: 2300,
     specific_heat: 880,
+    solar_absorptivity: 0.60,
+    emissivity: 0.88,
     description: 'Dense concrete – high thermal mass (representative value)',
   },
   stone: {
@@ -23,6 +27,8 @@ export const WALL_MATERIALS = {
     conductivity: 1.7,
     density: 2500,
     specific_heat: 790,
+    solar_absorptivity: 0.60,
+    emissivity: 0.90,
     description: 'Local stone masonry (representative value)',
   },
   mud: {
@@ -31,6 +37,8 @@ export const WALL_MATERIALS = {
     conductivity: 0.5,
     density: 1600,
     specific_heat: 880,
+    solar_absorptivity: 0.68,
+    emissivity: 0.92,
     description: 'Traditional earth construction (representative value)',
   },
   insulated_panel: {
@@ -39,6 +47,8 @@ export const WALL_MATERIALS = {
     conductivity: 0.035,
     density: 40,
     specific_heat: 1400,
+    solar_absorptivity: 0.35,
+    emissivity: 0.85,
     description: 'High-performance insulated sandwich panel (representative value)',
   },
   composite: {
@@ -47,7 +57,9 @@ export const WALL_MATERIALS = {
     conductivity: 0.18,
     density: 900,
     specific_heat: 900,
-    description: 'Brick outer + internal insulation (representative value)',
+    solar_absorptivity: 0.55,
+    emissivity: 0.90,
+    description: 'Brick outer + internal insulation layer (representative value)',
   },
 };
 
@@ -58,6 +70,8 @@ export const ROOF_MATERIALS = {
     conductivity: 1.4,
     density: 2300,
     specific_heat: 880,
+    solar_absorptivity: 0.60,
+    emissivity: 0.88,
     description: 'Standard RCC roof slab (representative value)',
   },
   insulated_panel: {
@@ -66,6 +80,8 @@ export const ROOF_MATERIALS = {
     conductivity: 0.035,
     density: 40,
     specific_heat: 1400,
+    solar_absorptivity: 0.35,
+    emissivity: 0.85,
     description: 'Lightweight high-R insulated roof panel (representative value)',
   },
   metal_sheet: {
@@ -74,7 +90,9 @@ export const ROOF_MATERIALS = {
     conductivity: 45,
     density: 7800,
     specific_heat: 500,
-    description: 'CGI / metal sheet – use thin thickness (representative value)',
+    solar_absorptivity: 0.75,
+    emissivity: 0.30,
+    description: 'CGI / metal sheet – high solar absorption (representative value)',
   },
   thatch: {
     id: 'thatch',
@@ -82,7 +100,9 @@ export const ROOF_MATERIALS = {
     conductivity: 0.07,
     density: 150,
     specific_heat: 1600,
-    description: 'Traditional thatch (representative value)',
+    solar_absorptivity: 0.70,
+    emissivity: 0.90,
+    description: 'Traditional thatch roof (representative value)',
   },
   composite_roof: {
     id: 'composite_roof',
@@ -90,7 +110,47 @@ export const ROOF_MATERIALS = {
     conductivity: 0.12,
     density: 600,
     specific_heat: 1000,
+    solar_absorptivity: 0.45,
+    emissivity: 0.85,
     description: 'Multi-layer insulated composite roof (representative value)',
+  },
+};
+
+export const WINDOW_MATERIALS = {
+  single_glazing: {
+    id: 'single_glazing',
+    name: 'Single Glazing (4mm)',
+    u: 5.8,
+    g: 0.85,
+    description: 'Basic single glass pane - high heat loss',
+  },
+  double_glazing: {
+    id: 'double_glazing',
+    name: 'Double Glazing (Standard)',
+    u: 2.8,
+    g: 0.75,
+    description: 'Standard double glazing with air gap',
+  },
+  double_low_e: {
+    id: 'double_low_e',
+    name: 'Double Glazing (Low-E)',
+    u: 1.4,
+    g: 0.60,
+    description: 'Double glazing with Low-Emissivity coating',
+  },
+  triple_glazing: {
+    id: 'triple_glazing',
+    name: 'Triple Glazing (High Performance)',
+    u: 0.8,
+    g: 0.50,
+    description: 'Triple pane insulated glazing for extreme cold',
+  },
+  insulated_translucent: {
+    id: 'insulated_translucent',
+    name: 'Insulated Translucent Panel',
+    u: 1.2,
+    g: 0.45,
+    description: 'Aerogel or multi-wall polycarbonate daylighting panel',
   },
 };
 
@@ -101,8 +161,7 @@ export function getMaterialR(material, thickness) {
 
 export function estimateThermalCapacity(params) {
   const wallMat = WALL_MATERIALS[params.wall_material];
-  let roofMat = ROOF_MATERIALS[params.roof_material];
-  // Map roof composite id to distinct backend props via same frontend numbers
+  const roofMat = ROOF_MATERIALS[params.roof_material];
   const grossWall = Number(params.wall_area) || 0;
   const windowArea = Number(params.window_area) || 0;
   const netWall = Math.max(0, grossWall - windowArea);
@@ -164,8 +223,9 @@ export const DEFAULT_PARAMS = {
   roof_thickness: 0.25,
   wall_material: 'brick',
   roof_material: 'insulated_panel',
-  initial_temperature: 20,
+  window_type: 'double_glazing',
+  initial_temperature: '',
   orientation: 'South',
   shelter_height: 2.5,
-  simulation_hours: 24,
+  spin_up: true,
 };

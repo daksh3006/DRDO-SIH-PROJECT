@@ -1,0 +1,26 @@
+THERMAL SHELTER SIMULATOR - PROTOTYPE
+
+IMPORTANT: Do NOT double-click index.html. This is a Vite React app.
+
+1) Open a terminal in this folder:
+   shelter-sim
+
+2) Install dependencies:
+   npm install
+
+3) Start the frontend:
+   npm run dev
+
+4) Open the localhost address printed by Vite (normally http://localhost:5173/).
+
+Backend:
+Open another terminal in the project root and run the FastAPI backend using your normal Python environment, e.g.:
+   python -m uvicorn main:app --reload --port 8000
+
+The frontend proxies /api to http://localhost:8000.
+
+If you deploy the frontend as a static build:
+   npm run build
+   npm run preview
+
+The prototype includes the physical validation, 72h spin-up, historical solar timestamps, offline weather fallback, dynamic sensitivity limits, and uncertainty display fixes.

@@ -1,19 +1,36 @@
 # Thermal Shelter Simulator
 
-**Area-Specific Passive Shelter Thermal Comfort Simulator**  
-SIH (Smart India Hackathon) Prototype – Frontend
+**Area-Specific Passive Shelter Thermal Comfort & Engineering Analysis Platform**  
+SIH Prototype – High-Altitude Passive Thermal Simulation & Model Verification
 
-A professional engineering-style web application for simulating passive thermal performance of shelters in high-altitude cold climates (e.g. Ladakh).
+A professional engineering platform for simulating and analyzing passive thermal performance of shelters in high-altitude cold climates (e.g., Leh, Ladakh).
 
-## Tech Stack
+> **Core Project Statement**: The Thermal Shelter Simulator is a reduced-order 2-node transient thermal simulation platform that uses location-specific weather data to predict 24-hour shelter thermal behaviour and compare passive shelter designs. The current prototype performs model verification against synthetic reference scenarios and has not yet been experimentally validated using measured shelter temperature data.
 
-- **Frontend**: React 19 + Vite
-- **Styling**: Tailwind CSS v4
-- **Charts**: Recharts
-- **Icons**: Lucide React
-- **Backend** (separate): Python + FastAPI wrapping existing `simulate_shelter(...)`
+---
+
+## Technical Features & Physics Core
+
+1. **Reduced-Order 2-Node Transient Thermal Model**: Building envelope thermal mass node ($T_{\text{env}}$, $C_{\text{env}}$) and indoor air + contents node ($T_{\text{in}}$, $C_{\text{indoor}}$) coupled via surface resistances ($R_{\text{si}}$, $R_{\text{se}}$).
+2. **3-Day Historical Weather Spin-Up**: Ingests preceding 72 hours of Open-Meteo climate history (temperature, solar radiation, wind speed) to establish true periodic thermal mass equilibrium prior to the 24-hour simulation window.
+3. **Estimated Ground Temperature Boundary**: Continuous floor slab coupling ($H_{\text{ground}} = A_{\text{floor}} \cdot U_{\text{floor}}$) with $T_{\text{ground}} = T_{\text{mean}} - 2.0\text{K}$.
+4. **Simplified Pitched Roof Solar Irradiance Model**: Tilt-angle solar irradiance calculation for roof surfaces ($\beta = 15^\circ$) combining direct beam, sky diffuse, and ground-reflected radiation.
+5. **Effective Sky Temperature Approximation**: Nocturnal sky radiation exchange using $T_{\text{sky}} = T_{\text{out}} - 12.0\text{K}$.
+6. **Configurable Weighted Engineering Score**: Multi-criteria weighted evaluation balancing comfort hours ($16\text{–}26^\circ\text{C}$), cold-climate minimum temperature maintenance, diurnal thermal stability, and heat loss reduction, with user-configurable weighting controls and presets.
+7. **Parametric Sensitivity Analysis**: Single-parameter sweeps over wall thickness, roof thickness, ACH, window area, and occupant loads to quantify thermal sensitivities.
+
+---
 
 ## Quick Start
+
+### 1. Start Python FastAPI Backend
+
+```bash
+uvicorn main:app --reload --port 8000
+# or python main.py
+```
+
+### 2. Start React Frontend
 
 ```bash
 cd shelter-sim
@@ -23,114 +40,15 @@ npm run dev
 
 Open http://localhost:5173
 
-## Project Structure
+---
 
-```
-src/
-  components/
-    Header.jsx           # Top bar with Run / Reset / status
-    Sidebar.jsx          # Input panel (location, geometry, materials, thermal)
-    MaterialSelector.jsx # Wall & roof material dropdowns + properties
-    SummaryCards.jsx     # KPI row after simulation
-    TemperatureChart.jsx # Indoor vs Ambient line chart
-    EnergyChart.jsx      # Solar gain vs heat loss area chart
-    ComfortCard.jsx      # Comfort hours breakdown
-    ShelterDiagram.jsx   # Conceptual energy-flow diagram
-    DesignComparison.jsx # Side-by-side design comparison table
-  pages/
-    Dashboard.jsx        # Main orchestration page
-  services/
-    api.js               # API client + mock fallback
-  data/
-    materials.js         # Material library & default params
-  App.jsx
-  index.css
-  main.jsx
-```
+## Backend Integration & API Endpoints
 
-## Backend Integration
+### 1. Simulation Endpoint: `POST /api/simulate`
+Computes the 24-hour transient thermal response for given shelter geometry, materials, roof pitch, and location.
 
-### API Endpoint
+### 2. Synthetic Reference Case Endpoint: `GET /api/validate`
+Returns a synthetic reference case for model verification comparing 2-node simulation predictions against predefined synthetic reference benchmark trajectories.
 
-```
-POST /simulate
-```
-
-### Request body (matches existing Python function)
-
-```json
-{
-  "location": "Leh",
-  "wall_area": 120,
-  "roof_area": 80,
-  "window_area": 12,
-  "wall_thickness": 0.35,
-  "roof_thickness": 0.25,
-  "wall_material": "brick",
-  "roof_material": "insulated_panel",
-  "thermal_capacity": 150000,
-  "initial_temperature": 15
-}
-```
-
-### Expected response
-
-```json
-{
-  "hours": [0, 1, ..., 23],
-  "ambient_temperature": [...],
-  "indoor_temperature": [...],
-  "solar_gain": [...],
-  "heat_loss": [...],
-  "comfort_status": ["too_cold", "comfortable", ...],
-  "summary": {
-    "average_temperature": 18.4,
-    "minimum_temperature": 8.2,
-    "maximum_temperature": 25.1,
-    "total_solar_gain": 12450,
-    "total_heat_loss": 8320,
-    "comfort_hours": 17
-  }
-}
-```
-
-### Changing the API URL
-
-1. **Development (recommended)**  
-   Vite proxies `/api/*` → `http://localhost:8000/*`  
-   (see `vite.config.js`)
-
-2. **Environment variable**  
-   Create `.env`:
-   ```
-   VITE_API_URL=http://your-backend-host:8000
-   ```
-   Then restart `npm run dev`.
-
-3. **Code location**  
-   `src/services/api.js` → `API_BASE_URL`
-
-### Health check (optional but recommended)
-
-Backend should expose:
-
-```
-GET /health  →  200 OK
-```
-
-Frontend polls this to show "Backend Online" vs "Demo Mode (Mock)".
-
-## Demo Mode
-
-If the backend is unreachable, the UI automatically falls back to a realistic mock simulation so the SIH demo never breaks. A clear banner indicates demo mode.
-
-## Default Location
-
-Pre-filled for **Leh, Ladakh** (34.15°N, 77.58°E) – high-altitude cold climate representative of the problem statement.
-
-## Notes for Judges / Evaluators
-
-- All thermal physics remain in the Python backend (`simulate_shelter`).
-- Frontend only collects design parameters and visualizes the returned time-series.
-- Material properties shown in the UI are for user feedback; the backend MATERIALS.py is the source of truth for calculations.
-- Design Comparison lets you save multiple runs and highlight the configuration with the most comfort hours.
+### 3. Parametric Sensitivity Endpoint: `POST /api/sensitivity`
+Runs a 5-step parametric sweep across design variables (`wall_thickness`, `roof_thickness`, `ach`, `window_area`, `occupants`) to quantify trade-offs in comfort hours, minimum temperature, and heat transfer.
